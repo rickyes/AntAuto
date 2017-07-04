@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="GBk"?>
+<project basedir="." default="main">
+  <!-- ANT环境变量 -->
+  <!--
+	    <property environment="env" />
+	    <property name="sdk.dir" value="${env.ANDROID_HOME}"/>  
+	    <echo> ${sdk.dir} </echo>  
+
+    -->
+  <!-- 项目所在文件夹 -->
+  <property name="old_package_name" value="com.example.ant0" />
+  <property name="new_package_name" value="com.example.ant0" />
+  <property name="keystore" value="8.keystore" />
+  <property name="project-dir" value="D:/Program Files/Eclipse/JSE/project/AntApkTest" />
+  <!-- JAVA目录(获取操作系统环境变量JAVA_HOME的值) -->
+  <property name="java_home" value="D:/Program Files/jdk" />
+  <!-- SDK目录(获取操作系统环境变量ANDROID_SDK_HOME的值) -->
+  <property name="sdk-folder" value="D:/Program Files/sdk" />
+  <!-- 指定平台对应的android.jar -->
+  <property name="android-jar" value="${sdk-folder}/platforms/android-22/android.jar" />
+  <!-- SDK指定平台目录 -->
+  <property name="sdk-platform-folder" value="${sdk-folder}/platforms/android-22" />
+  <!-- SDK中tools目录 -->
+  <property name="sdk-tools" value="${sdk-folder}/tools" />
+  <!-- SDK中build_tools目录 -->
+  <property name="build-tools" value="${sdk-folder}/build-tools/23.0.2" />
+  <!-- SDK指定平台中tools目录 -->
+  <property name="sdk-platform-tools" value="${sdk-platform-folder}/tools" />
+  <!-- 使用到的命令 -->
+  <property name="aapt" value="${build-tools}/aapt" />
+  <property name="aidl" value="${build-tools}/aidl" />
+  <property name="dx" value="${build-tools}/dx.bat" />
+  <property name="zipalign" value="${build-tools}/zipalign" />
+  <property name="apkbuilder" value="${sdk-tools}/lib/sdklib.jar" />
+  <property name="jarsigner" value="${java_home}/bin/jarsigner" />
+  <target name="init">
+    <echo>start initing ...</echo>
+    <delete>
+      <fileset dir="gen" />
+    </delete>
+    <mkdir dir="gen" />
+    <delete>
+      <fileset dir="bin/classes" />
+    </delete>
+    <mkdir dir="bin/classes" />
+    <echo>finish initing.</echo>
+    <replaceregexp byline="true" encoding="UTF-8" flags="g">
+      <regexp pattern="package(.*)${old_package_name}" />
+      <substitution expression="package=&quot;${new_package_name}" />
+      <fileset dir="${project-dir}" includes="AndroidManifest.xml" />
+    </replaceregexp>
+    <replaceregexp byline="false" encoding="UTF-8" flags="g">
+      <regexp pattern="import(.*)${old_package_name}.R" />
+      <substitution expression="import ${new_package_name}.R" />
+      <fileset dir="${project-dir}/src" includes="**/*.java" />
+    </replaceregexp>
+  </target>
+  <target name="main" depends="init">
+    <echo>1.正在生成用于应用的R.java存放到gen(使用aapt) ...</echo>
+    <exec executable="${aapt}">
+      <arg value="package" />
+      <arg value="-m" />
+      <arg value="-J" />
+      <arg value="gen" />
+      <arg value="-S" />
+      <arg value="res" />
+      <arg value="-M" />
+      <arg value="AndroidManifest.xml" />
+      <arg value="-I" />
+      <arg value="${android-jar}" />
+      <arg value="--auto-add-overlay" />
+      <!-- 覆盖资源 -->
+    </exec>
+    <echo>步骤1已经完成...</echo>
+    <echo>2.正在编译所有java文件为class文件(包含src和gen目录)...</echo>
+    <javac bootclasspath="${android-jar}" destdir="bin/classes" target="1.7">
+      <src path="src" />
+      <src path="gen" />
+    </javac>
+    <echo>步骤2已经完成...</echo>
+    <echo>3.正在打包class文件和jar包为classes.dex...</echo>
+    <exec executable="${dx}" failonerror="true">
+      <arg value="--dex" />
+      <arg value="--output=${project-dir}/bin/classes.dex" />
+      <arg path="${project-dir}/bin/classes" />
+    </exec>
+    <echo>步骤3已经完成...</echo>
+    <echo>4.正在打包assets和res资源为资源压缩包res.zip...(include res, assets, AndroidManifest.xml, 等等...)</echo>
+    <exec executable="${aapt}">
+      <arg value="package" />
+      <arg value="-f" />
+      <arg value="-M" />
+      <arg value="AndroidManifest.xml" />
+      <arg value="-S" />
+      <arg value="res" />
+      <arg value="-A" />
+      <arg value="assets" />
+      <arg value="-I" />
+      <arg value="${android-jar}" />
+      <arg value="-F" />
+      <arg value="bin/resources.ap_" />
+      <arg value="--auto-add-overlay" />
+    </exec>
+    <echo>步骤4已经完成...</echo>
+    <echo>5.正在构建classes.dex和res.zip生成未签名的APK(unsigned.apk)...</echo>
+    <java classname="com.android.sdklib.build.ApkBuilderMain" classpath="${sdk-tools}/lib/sdklib.jar">
+      <!-- <exec executable="${apkbuilder}" > -->
+      <arg value="${project-dir}/bin/unsigned.apk" />
+      <arg value="-u" />
+      <arg value="-z" />
+      <arg value="${project-dir}/bin/resources.ap_" />
+      <arg value="-f" />
+      <arg value="${project-dir}/bin/classes.dex" />
+      <!-- </exec> -->
+    </java>
+    <echo>步骤5已经完成...</echo>
+    <echo>6.正在生成有签名的APK...</echo>
+    <exec executable="${jarsigner}">
+      <arg value="-keystore" />
+      <arg value="${project-dir}/keystores/${keystore}" />
+      <arg value="-storepass" />
+      <arg value="android" />
+      <arg value="-keypass" />
+      <arg value="android" />
+      <arg value="-signedjar" />
+      <arg value="${project-dir}/bin/signed.apk" />
+      <arg value="${project-dir}/bin/unsigned.apk" />
+      <arg value="ant" />
+    </exec>
+    <echo>步骤6已经完成...</echo>
+    <echo>7.正在对签名包进行zipalign优化...</echo>
+    <exec executable="${zipalign}">
+      <arg value="-v" />
+      <arg value="4" />
+      <arg value="${project-dir}/bin/signed.apk" />
+      <!-- signed apk -->
+      <arg value="${project-dir}/apks/${new_package_name}.apk" />
+      <!-- zipalign output -->
+    </exec>
+    <echo>步骤7已经完成...</echo>
+  </target>
+  <target name="clean" />
+</project>
+
